@@ -16,6 +16,18 @@ from src.schemas.analysis_context_pack import (
     ContextFieldStatus,
     DataQuality,
 )
+from src.schemas.board_diagnosis import (
+    BoardAssetRef,
+    BoardAssetRole,
+    BoardDefinition,
+    BoardDefinitionSummary,
+    BoardDecisionAction,
+    BoardDecisionConfidence,
+    BoardDiagnosisDimension,
+    BoardDiagnosisResult,
+    BoardDiagnosisSource,
+    BoardSignalDataStatus,
+)
 from src.schemas.report_schema import AnalysisReportSchema
 
 __all__ = [
@@ -27,4 +39,14 @@ __all__ = [
     "AnalysisSubject",
     "ContextFieldStatus",
     "DataQuality",
+    "BoardAssetRef",
+    "BoardAssetRole",
+    "BoardDefinition",
+    "BoardDefinitionSummary",
+    "BoardDecisionAction",
+    "BoardDecisionConfidence",
+    "BoardDiagnosisDimension",
+    "BoardDiagnosisResult",
+    "BoardDiagnosisSource",
+    "BoardSignalDataStatus",
 ]

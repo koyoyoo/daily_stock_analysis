@@ -64,9 +64,6 @@ const TaskItem: React.FC<TaskItemProps> = ({ task }) => {
           <details className="group/task mt-2 text-xs">
             <summary className="flex cursor-pointer list-none items-center gap-2 text-muted-text">
               <span>运行诊断</span>
-              <span className="font-mono text-[11px] text-secondary-text">
-                {traceId.length > 18 ? `${traceId.slice(0, 10)}...` : traceId}
-              </span>
               <ChevronDown className="h-3.5 w-3.5 transition-transform group-open/task:rotate-180" aria-hidden="true" />
             </summary>
             <div className="mt-1 rounded-lg border border-subtle bg-base/50 px-2 py-1.5 text-muted-text">

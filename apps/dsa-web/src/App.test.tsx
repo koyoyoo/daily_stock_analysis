@@ -39,6 +39,10 @@ vi.mock('./pages/ChatPage', () => ({
   },
 }));
 
+vi.mock('./pages/BoardDiagnosisPage', () => ({
+  default: () => <div data-testid="board-diagnosis-page">Board Diagnosis</div>,
+}));
+
 vi.mock('./pages/PortfolioPage', () => ({
   default: () => <div data-testid="portfolio-page">Portfolio</div>,
 }));
@@ -120,6 +124,15 @@ describe('App routing behavior', () => {
     expect(setCurrentRoute).toHaveBeenCalledWith('/chat');
     expect(screen.queryByTestId('login-page')).not.toBeInTheDocument();
     expect(screen.queryByTestId('home-page')).not.toBeInTheDocument();
+  });
+
+  it('renders the board diagnosis route after auth is ready', async () => {
+    window.history.pushState({}, '', '/board-diagnosis');
+
+    render(<App />);
+
+    expect(await screen.findByTestId('board-diagnosis-page')).toBeInTheDocument();
+    expect(setCurrentRoute).toHaveBeenCalledWith('/board-diagnosis');
   });
 
   it('redirects authenticated login visits back to the home page', async () => {

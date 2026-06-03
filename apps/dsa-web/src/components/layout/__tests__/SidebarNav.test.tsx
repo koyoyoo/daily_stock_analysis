@@ -71,7 +71,7 @@ describe('SidebarNav', () => {
 
     await screen.findByRole('link', { name: '选股' });
     const hrefs = screen.getAllByRole('link').map((link) => link.getAttribute('href'));
-    expect(hrefs.slice(0, 4)).toEqual(['/', '/chat', '/screening', '/portfolio']);
+    expect(hrefs.slice(0, 5)).toEqual(['/', '/board-diagnosis', '/chat', '/screening', '/portfolio']);
   });
 
   it('refreshes the screening navigation item after any config save event', async () => {
@@ -137,6 +137,18 @@ describe('SidebarNav', () => {
     const alertsLink = screen.getByRole('link', { name: '告警' });
     expect(alertsLink).toHaveAttribute('href', '/alerts');
     expect(alertsLink).toHaveClass('font-medium');
+  });
+
+  it('renders the board diagnosis navigation item', () => {
+    render(
+      <MemoryRouter initialEntries={['/board-diagnosis']}>
+        <SidebarNav />
+      </MemoryRouter>,
+    );
+
+    const boardLink = screen.getByRole('link', { name: 'ETF板块' });
+    expect(boardLink).toHaveAttribute('href', '/board-diagnosis');
+    expect(boardLink).toHaveClass('font-medium');
   });
 
   it('opens the logout confirmation and confirms logout', async () => {

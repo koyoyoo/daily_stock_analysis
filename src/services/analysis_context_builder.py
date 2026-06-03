@@ -52,6 +52,18 @@ _AUX_LIMITATION_STATUSES = {
     ContextFieldStatus.FALLBACK,
     ContextFieldStatus.STALE,
 }
+_SOURCE_DISPLAY_NAMES: Dict[str, str] = {
+    "tencent": "腾讯财经",
+    "akshare_em": "东方财富",
+    "akshare": "AkShare",
+    "akshare_sina": "新浪财经",
+    "akshare_qq": "腾讯财经",
+    "efinance": "东方财富(efinance)",
+    "tushare": "Tushare Pro",
+    "sina": "新浪财经",
+    "longbridge": "长桥",
+    "fallback": "降级兜底",
+}
 
 
 @dataclass(frozen=True)
@@ -125,7 +137,8 @@ def _build_quote_block(artifacts: PipelineAnalysisArtifacts) -> AnalysisContextB
             },
         )
 
-    source = _source_text(quote.get("source"))
+    raw_source = quote.get("source")
+    source = _source_text(raw_source)
     status = ContextFieldStatus.AVAILABLE
     warnings: List[str] = []
     fallback_from = _metadata_value(
@@ -141,7 +154,7 @@ def _build_quote_block(artifacts: PipelineAnalysisArtifacts) -> AnalysisContextB
         "fallback_from",
     )
     timestamp = _quote_timestamp(artifacts, quote)
-    is_fallback = fallback_from is not None or source == "fallback"
+    is_fallback = fallback_from is not None or str(raw_source).strip().lower() == "fallback"
 
     if _has_explicit_quote_stale_marker(artifacts, quote):
         status = ContextFieldStatus.STALE
@@ -535,7 +548,27 @@ def _source_text(value: Any) -> Optional[str]:
     if enum_value is not None:
         value = enum_value
     text = str(value).strip()
-    return text or None
+    if not text:
+        return None
+    normalized = text.lower()
+    if normalized in _SOURCE_DISPLAY_NAMES:
+        return _SOURCE_DISPLAY_NAMES[normalized]
+    if ":" in text:
+        prefix, suffix = text.split(":", 1)
+        prefix_display = _SOURCE_DISPLAY_NAMES.get(prefix.strip().lower())
+        suffix_display = _SOURCE_DISPLAY_NAMES.get(suffix.strip().lower())
+        if prefix_display and suffix_display:
+            return f"{prefix_display}: {suffix_display}"
+    if text.startswith("local_volume_profile:"):
+        algorithm = text.split(":", 1)[1].strip().lower()
+        match algorithm:
+            case "time_decay":
+                return "本地筹码峰算法（时间衰减）"
+            case "fixed_window":
+                return "本地筹码峰算法（固定周期）"
+            case _:
+                return "本地筹码峰算法"
+    return text
 
 
 def _metadata_value(metadata: Dict[str, Any], *keys: str) -> Optional[str]:

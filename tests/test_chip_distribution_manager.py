@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Regression tests for chip distribution provider fallback."""
 
+from datetime import date, timedelta
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -67,3 +68,32 @@ def test_manager_accepts_zero_concentration_chip_distribution():
     assert chip is zero_concentration_chip
     assert zero_fetcher.calls == 1
     assert fallback_fetcher.calls == 0
+
+
+def test_manager_uses_local_chip_profile_when_all_providers_fail():
+    get_chip_circuit_breaker().reset()
+    manager = DataFetcherManager(fetchers=[_ChipFetcher("FailingFetcher", 0, None)])
+    start = date(2026, 4, 1)
+    local_bars = [
+        SimpleNamespace(
+            date=start + timedelta(days=index),
+            high=10.8 + index * 0.25,
+            low=9.7 + index * 0.25,
+            close=10.3 + index * 0.25,
+            volume=1_000_000 + index * 8_000,
+        )
+        for index in range(40)
+    ]
+
+    with (
+        patch("src.config.get_config", return_value=SimpleNamespace(enable_chip_distribution=True)),
+        patch("src.repositories.stock_repo.StockRepository") as stock_repo_cls,
+    ):
+        stock_repo_cls.return_value.get_latest.return_value = local_bars
+        chip = manager.get_chip_distribution("600519")
+
+    assert chip is not None
+    assert chip.source == "local_volume_profile:time_decay"
+    assert chip.code == "600519"
+    assert chip.avg_cost > 0
+    assert 0 <= chip.profit_ratio <= 1

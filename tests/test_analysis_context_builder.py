@@ -110,7 +110,8 @@ def _artifacts(**overrides) -> PipelineAnalysisArtifacts:
 def test_quote_block_maps_available_missing_fallback_and_explicit_stale() -> None:
     available = AnalysisContextBuilder.build(_artifacts()).blocks["quote"]
     assert available.status == ContextFieldStatus.AVAILABLE
-    assert available.source == "akshare_em"
+    assert available.source == "东方财富"
+    assert available.items["price"].source == "东方财富"
     assert available.items["price"].value == 1880.0
 
     missing = AnalysisContextBuilder.build(
@@ -123,6 +124,7 @@ def test_quote_block_maps_available_missing_fallback_and_explicit_stale() -> Non
         _artifacts(realtime_quote=_quote(RealtimeSource.FALLBACK))
     ).blocks["quote"]
     assert fallback.status == ContextFieldStatus.FALLBACK
+    assert fallback.source == "降级兜底"
     assert "realtime_provider_fallback" in fallback.warnings
     assert fallback.items["price"].fallback_from is None
 
@@ -136,6 +138,7 @@ def test_quote_block_maps_available_missing_fallback_and_explicit_stale() -> Non
         )
     ).blocks["quote"]
     assert explicit_fallback.status == ContextFieldStatus.FALLBACK
+    assert explicit_fallback.source == "降级兜底"
     assert explicit_fallback.items["price"].fallback_from == "primary_realtime_provider"
     assert "realtime_provider_fallback" not in explicit_fallback.warnings
 
@@ -161,7 +164,7 @@ def test_quote_block_maps_realtime_metadata_and_status_priority() -> None:
     ).blocks["quote"]
 
     assert fallback.status == ContextFieldStatus.FALLBACK
-    assert fallback.source == "akshare_em"
+    assert fallback.source == "东方财富"
     assert fallback.timestamp == "2026-05-31T10:00:00+00:00"
     assert fallback.items["price"].timestamp == "2026-05-31T10:00:00+00:00"
     assert fallback.items["price"].fallback_from == "efinance"
@@ -184,7 +187,7 @@ def test_quote_block_maps_realtime_metadata_and_status_priority() -> None:
     ).blocks["quote"]
 
     assert stale.status == ContextFieldStatus.STALE
-    assert stale.source == "akshare_em"
+    assert stale.source == "东方财富"
     assert stale.items["price"].fallback_from == "efinance"
     assert "quote_stale" in stale.warnings
 
@@ -348,6 +351,25 @@ def test_chip_missing_defaults_to_missing_and_explicit_not_supported() -> None:
         not_supported.items["chip_distribution"].missing_reason
         == "chip_not_supported"
     )
+
+
+def test_chip_block_maps_local_volume_profile_source_to_readable_text() -> None:
+    block = AnalysisContextBuilder.build(
+        _artifacts(
+            chip_data={
+                "code": "002015",
+                "date": "2026-06-03",
+                "source": "local_volume_profile:time_decay",
+                "profit_ratio": 0.88,
+                "avg_cost": 21.28,
+                "concentration_90": 0.14,
+            }
+        )
+    ).blocks["chip"]
+
+    assert block.status == ContextFieldStatus.AVAILABLE
+    assert block.source == "本地筹码峰算法（时间衰减）"
+    assert block.items["avg_cost"].source == "本地筹码峰算法（时间衰减）"
 
 
 @pytest.mark.parametrize(

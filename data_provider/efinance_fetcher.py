@@ -1076,6 +1076,67 @@ class EfinanceFetcher(BaseFetcher):
         except Exception as e:
             logger.error(f"[efinance] 获取板块排行失败: {e}")
             return None
+
+    def get_sector_snapshot(self, sector_names: List[str]) -> Optional[Dict[str, Any]]:
+        """
+        获取指定行业板块的成交额快照。
+
+        参数：
+            sector_names: 候选板块名称列表，推荐值：按精确名称优先排序。
+
+        返回：
+            包含板块名称、涨跌幅、成交额的字典；失败返回 None。
+        """
+        import efinance as ef
+
+        normalized_names = [str(name).strip() for name in sector_names if str(name).strip()]
+        if not normalized_names:
+            return None
+
+        try:
+            self._set_random_user_agent()
+            self._enforce_rate_limit()
+
+            logger.info("[API调用] ef.stock.get_realtime_quotes(['行业板块']) 获取板块快照...")
+            df = _ef_call_with_timeout(ef.stock.get_realtime_quotes, ["行业板块"])
+            if df is None or df.empty:
+                return None
+
+            name_col = "股票名称" if "股票名称" in df.columns else "name" if "name" in df.columns else None
+            change_col = "涨跌幅" if "涨跌幅" in df.columns else "pct_chg" if "pct_chg" in df.columns else None
+            amount_col = "成交额" if "成交额" in df.columns else "amount" if "amount" in df.columns else None
+            if not name_col or not amount_col:
+                return None
+
+            candidates = df.copy()
+            candidates[name_col] = candidates[name_col].astype(str).str.strip()
+            candidates[amount_col] = pd.to_numeric(candidates[amount_col], errors="coerce")
+            if change_col:
+                candidates[change_col] = pd.to_numeric(candidates[change_col], errors="coerce")
+
+            for sector_name in normalized_names:
+                exact = candidates[candidates[name_col] == sector_name]
+                if exact.empty:
+                    fuzzy = candidates[candidates[name_col].str.contains(sector_name, regex=False)]
+                    exact = fuzzy.head(1)
+                if exact.empty:
+                    continue
+
+                row = exact.iloc[0]
+                amount = row.get(amount_col)
+                if pd.isna(amount):
+                    continue
+                return {
+                    "name": str(row[name_col]),
+                    "change_pct": float(row[change_col]) if change_col and not pd.isna(row.get(change_col)) else None,
+                    "amount": float(amount) / 1e8,
+                    "source": "efinance.sector_realtime_quotes",
+                }
+
+            return None
+        except Exception as e:
+            logger.warning("[efinance] 获取板块快照失败: %s", e)
+            return None
     
     def get_base_info(self, stock_code: str) -> Optional[Dict[str, Any]]:
         """

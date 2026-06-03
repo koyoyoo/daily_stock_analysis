@@ -1840,6 +1840,44 @@ class DataFetcherManager:
         """Shortcut kept for backward-compat with A-share general loop."""
         return self._supplement_quote(stock_code, primary_quote, "LongbridgeFetcher")
 
+    def _build_local_chip_distribution(self, stock_code: str):
+        """
+        用途：在外部筹码接口全部失败后，基于本地日线缓存计算筹码峰兜底结果。
+
+        参数：
+        - stock_code: 股票代码；必填。
+
+        返回：
+        - ChipDistribution | None: 成功时返回兼容对象，样本不足或本地无数据时返回 None。
+
+        异常：
+        - ValueError: 本地样本不足或参数非法时由算法模块抛出，并在此处转为日志。
+        """
+        from src.repositories.stock_repo import StockRepository
+        from src.utils import (
+            DEFAULT_CHIP_PROFILE_ALGORITHM,
+            DEFAULT_CHIP_PROFILE_BINS,
+            DEFAULT_CHIP_PROFILE_HALF_LIFE_DAYS,
+            DEFAULT_CHIP_PROFILE_LOOKBACK_BARS,
+            build_chip_distribution_from_bars,
+        )
+
+        bars = StockRepository().get_latest(stock_code, days=DEFAULT_CHIP_PROFILE_LOOKBACK_BARS)
+        if not bars:
+            return None
+
+        try:
+            return build_chip_distribution_from_bars(
+                stock_code=stock_code,
+                bars=bars,
+                algorithm=DEFAULT_CHIP_PROFILE_ALGORITHM,
+                bins=DEFAULT_CHIP_PROFILE_BINS,
+                half_life_days=DEFAULT_CHIP_PROFILE_HALF_LIFE_DAYS,
+            )
+        except (TypeError, ValueError) as exc:
+            logger.info("[筹码分布] 本地筹码峰兜底跳过 %s: %s", stock_code, exc)
+            return None
+
     def get_chip_distribution(self, stock_code: str):
         """
         获取筹码分布数据（带熔断和多数据源降级）
@@ -1904,6 +1942,11 @@ class DataFetcherManager:
                 logger.warning(f"[筹码分布] {fetcher_name} 获取 {stock_code} 失败: {e}")
                 circuit_breaker.record_failure(source_key, str(e))
                 continue
+
+        local_chip = self._build_local_chip_distribution(stock_code)
+        if _is_meaningful_chip_distribution(local_chip):
+            logger.info(f"[筹码分布] {stock_code} 使用本地筹码峰兜底成功")
+            return local_chip
 
         logger.warning(f"[筹码分布] {stock_code} 所有数据源均失败")
         return None
@@ -2138,6 +2181,36 @@ class DataFetcherManager:
                 logger.warning(f"[{fetcher.name}] 获取市场统计失败: {e}")
                 continue
         return {}
+
+    def get_etf_share_change(self, stock_code: str, lookback_days: int = 10) -> Optional[Dict[str, Any]]:
+        """获取 ETF 份额变化（自动切换到支持该能力的数据源）。"""
+        for fetcher in self._fetchers:
+            if not hasattr(fetcher, "get_etf_share_change"):
+                continue
+            try:
+                data = fetcher.get_etf_share_change(stock_code, lookback_days=lookback_days)
+                if data:
+                    logger.info(f"[{fetcher.name}] 获取 ETF 份额变化成功")
+                    return data
+            except Exception as e:
+                logger.warning(f"[{fetcher.name}] 获取 ETF 份额变化失败: {e}")
+                continue
+        return None
+
+    def get_sector_snapshot(self, sector_names: List[str]) -> Optional[Dict[str, Any]]:
+        """获取单个板块的成交额快照（自动切换到支持该能力的数据源）。"""
+        for fetcher in self._fetchers:
+            if not hasattr(fetcher, "get_sector_snapshot"):
+                continue
+            try:
+                data = fetcher.get_sector_snapshot(sector_names)
+                if data:
+                    logger.info(f"[{fetcher.name}] 获取板块快照成功")
+                    return data
+            except Exception as e:
+                logger.warning(f"[{fetcher.name}] 获取板块快照失败: {e}")
+                continue
+        return None
 
     def _run_with_timeout(
         self,

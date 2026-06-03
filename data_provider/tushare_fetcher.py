@@ -666,6 +666,81 @@ class TushareFetcher(BaseFetcher):
             logger.warning(f"Tushare 获取股票列表失败: {e}")
 
         return None
+
+    def get_etf_share_change(self, stock_code: str, lookback_days: int = 10) -> Optional[dict]:
+        """
+        获取 ETF 份额变化快照。
+
+        参数：
+            stock_code: ETF 代码。
+            lookback_days: 回看交易日数量，推荐值：5-15。
+
+        返回：
+            包含 latest_share、previous_share、change、change_pct、trade_date 的字典；失败返回 None。
+
+        异常：
+            当 Tushare 不支持对应接口或字段时，函数返回 None 并记录 warning。
+        """
+        if self._api is None:
+            logger.warning("[Tushare] API 未初始化，无法获取 ETF 份额变化")
+            return None
+        if not _is_etf_code(stock_code):
+            logger.warning("[Tushare] %s 不是 ETF，拒绝获取份额变化", stock_code)
+            return None
+
+        try:
+            end_date = self.get_trade_time(early_time="00:00", late_time="19:00")
+            if not end_date:
+                return None
+
+            trade_dates = self._get_trade_dates(end_date)
+            if len(trade_dates) < 2:
+                return None
+            start_date = trade_dates[min(len(trade_dates) - 1, max(1, lookback_days - 1))]
+            ts_code = self._convert_stock_code(stock_code)
+
+            df = self._call_api_with_rate_limit(
+                "fund_share",
+                ts_code=ts_code,
+                start_date=start_date,
+                end_date=end_date,
+            )
+            if df is None or df.empty:
+                return None
+
+            share_col = next((column for column in ("fd_share", "share", "份额") if column in df.columns), None)
+            date_col = next((column for column in ("trade_date", "date") if column in df.columns), None)
+            if not share_col or not date_col:
+                logger.warning("[Tushare] fund_share 返回缺少关键列: columns=%s", list(df.columns))
+                return None
+
+            data = df.copy()
+            data[share_col] = pd.to_numeric(data[share_col], errors="coerce")
+            data = data.dropna(subset=[share_col, date_col]).sort_values(date_col)
+            if len(data) < 2:
+                return None
+
+            latest = data.iloc[-1]
+            previous = data.iloc[-2]
+            latest_share = float(latest[share_col])
+            previous_share = float(previous[share_col])
+            if previous_share == 0:
+                return None
+            change = latest_share - previous_share
+            change_pct = change / previous_share * 100
+            return {
+                "latest_share": latest_share,
+                "previous_share": previous_share,
+                "change": change,
+                "change_pct": change_pct,
+                "trade_date": str(latest[date_col]),
+                "previous_trade_date": str(previous[date_col]),
+                "unit": "万份",
+                "source": "tushare.fund_share",
+            }
+        except Exception as e:
+            logger.warning("[Tushare] 获取 ETF 份额变化失败 %s: %s", stock_code, e)
+            return None
     
     def get_realtime_quote(self, stock_code: str) -> Optional[UnifiedRealtimeQuote]:
         """
