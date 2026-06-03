@@ -1,7 +1,10 @@
 import type React from 'react';
 import { ChevronDown, Database } from 'lucide-react';
 import type {
+  AnalysisContextPackOverviewAnalysisScore,
   AnalysisContextPackBlockStatus,
+  AnalysisScoreAction,
+  AnalysisScoreLevel,
   AnalysisContextPackOverview,
   ReportLanguage,
 } from '../../types/analysis';
@@ -35,6 +38,15 @@ const QUALITY_STYLE = {
   poor: { variant: 'danger', tone: 'danger' },
 } as const satisfies Record<string, { variant: BadgeVariant; tone: StatusTone }>;
 
+const ANALYSIS_LEVEL_STYLE = {
+  strong: { variant: 'success', tone: 'success' },
+  positive: { variant: 'info', tone: 'info' },
+  neutral: { variant: 'default', tone: 'neutral' },
+  cautious: { variant: 'warning', tone: 'warning' },
+  weak: { variant: 'danger', tone: 'danger' },
+  unavailable: { variant: 'default', tone: 'neutral' },
+} as const satisfies Record<AnalysisScoreLevel, { variant: BadgeVariant; tone: StatusTone }>;
+
 const BLOCK_LABELS: Record<ReportLanguage, Record<string, string>> = {
   zh: {
     quote: '行情',
@@ -66,11 +78,31 @@ const TEXT = {
     limitations: '数据限制',
     newsResultCount: '新闻结果数',
     triggerSource: '触发来源',
+    analysisScore: '分析分',
+    analysisConfidence: '置信度',
+    analysisAction: '策略建议',
+    analysisSummary: '分析结论',
+    analysisSection: '多维评分',
     qualityLevel: {
       good: '良好',
       usable: '可用',
       limited: '受限',
       poor: '较差',
+    },
+    analysisLevel: {
+      strong: '强势',
+      positive: '偏多',
+      neutral: '中性',
+      cautious: '谨慎',
+      weak: '偏弱',
+      unavailable: '不可用',
+    },
+    analysisActionMap: {
+      priority_focus: '优先关注',
+      lean_positive: '偏多跟踪',
+      neutral_wait: '中性观察',
+      cautious: '谨慎等待',
+      avoid: '暂避风险',
     },
     status: {
       available: '可用',
@@ -94,11 +126,31 @@ const TEXT = {
     limitations: 'Data Limitations',
     newsResultCount: 'News Results',
     triggerSource: 'Trigger',
+    analysisScore: 'Score',
+    analysisConfidence: 'Confidence',
+    analysisAction: 'Action',
+    analysisSummary: 'Conclusion',
+    analysisSection: 'Multi-factor Score',
     qualityLevel: {
       good: 'Good',
       usable: 'Usable',
       limited: 'Limited',
       poor: 'Poor',
+    },
+    analysisLevel: {
+      strong: 'Strong',
+      positive: 'Positive',
+      neutral: 'Neutral',
+      cautious: 'Cautious',
+      weak: 'Weak',
+      unavailable: 'Unavailable',
+    },
+    analysisActionMap: {
+      priority_focus: 'Priority focus',
+      lean_positive: 'Lean positive',
+      neutral_wait: 'Watch',
+      cautious: 'Cautious',
+      avoid: 'Avoid',
     },
     status: {
       available: 'Available',
@@ -112,6 +164,21 @@ const TEXT = {
     },
   },
 } as const;
+
+const ANALYSIS_DIMENSION_ORDER = ['technical', 'fundamentals', 'chip'] as const;
+
+const formatAnalysisDimensionLabel = (key: string, language: ReportLanguage): string =>
+  BLOCK_LABELS[language][key] || key;
+
+const getAnalysisLevelLabel = (
+  level: AnalysisScoreLevel | null | undefined,
+  text: typeof TEXT.zh | typeof TEXT.en,
+): string | null => (level ? text.analysisLevel[level] || level : null);
+
+const getAnalysisActionLabel = (
+  action: AnalysisScoreAction | null | undefined,
+  text: typeof TEXT.zh | typeof TEXT.en,
+): string | null => (action ? text.analysisActionMap[action] || action : null);
 
 const STATUS_ORDER: AnalysisContextPackBlockStatus[] = [
   'available',
@@ -182,10 +249,24 @@ export const AnalysisContextSummary: React.FC<AnalysisContextSummaryProps> = ({
   ].filter((item): item is string => Boolean(item));
   const triggerSource = overview.metadata?.triggerSource?.trim();
   const quality = overview.dataQuality;
+  const analysisScore = overview.analysisScore;
   const qualityLevel = quality?.level || undefined;
   const qualityStyle = qualityLevel ? QUALITY_STYLE[qualityLevel] : undefined;
   const qualityLabel = qualityLevel ? text.qualityLevel[qualityLevel] : undefined;
   const limitations = quality?.limitations?.map((item) => formatLimitation(item, reportLanguage, text)) || [];
+  const overallAnalysisLevel = analysisScore?.level || undefined;
+  const analysisLevelLabel = getAnalysisLevelLabel(overallAnalysisLevel, text);
+  const analysisActionLabel = getAnalysisActionLabel(analysisScore?.action || undefined, text);
+  const analysisDimensions = ANALYSIS_DIMENSION_ORDER
+    .map((key) => ({ key, value: analysisScore?.dimensions?.[key] }))
+    .filter(
+      (
+        item,
+      ): item is {
+        key: (typeof ANALYSIS_DIMENSION_ORDER)[number];
+        value: NonNullable<AnalysisContextPackOverviewAnalysisScore['dimensions']>[string];
+      } => Boolean(item.value),
+    );
 
   return (
     <Card variant="bordered" padding="none" className="home-panel-card">
@@ -207,6 +288,17 @@ export const AnalysisContextSummary: React.FC<AnalysisContextSummaryProps> = ({
               <Badge variant={qualityStyle?.variant || 'default'} className="gap-1.5 shadow-none">
                 {qualityStyle ? <StatusDot tone={qualityStyle.tone} className="h-1.5 w-1.5" /> : null}
                 {text.qualityScore} {quality.overallScore}/100{qualityLabel ? ` ${qualityLabel}` : ''}
+              </Badge>
+            ) : null}
+            {typeof analysisScore?.overallScore === 'number' ? (
+              <Badge
+                variant={overallAnalysisLevel ? ANALYSIS_LEVEL_STYLE[overallAnalysisLevel].variant : 'default'}
+                className="gap-1.5 shadow-none"
+              >
+                {overallAnalysisLevel ? (
+                  <StatusDot tone={ANALYSIS_LEVEL_STYLE[overallAnalysisLevel].tone} className="h-1.5 w-1.5" />
+                ) : null}
+                {text.analysisScore} {analysisScore.overallScore}/100{analysisLevelLabel ? ` ${analysisLevelLabel}` : ''}
               </Badge>
             ) : null}
             {summaryCounts.map(({ status, value }) => {
@@ -251,6 +343,81 @@ export const AnalysisContextSummary: React.FC<AnalysisContextSummaryProps> = ({
               </div>
             ) : undefined}
           />
+
+          {analysisScore ? (
+            <div className="mb-3 home-subpanel p-3">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground">{text.analysisSection}</p>
+                  {analysisScore.summary ? (
+                    <p className="mt-1 text-xs leading-5 text-secondary-text">
+                      {text.analysisSummary}: {analysisScore.summary}
+                    </p>
+                  ) : null}
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {typeof analysisScore.overallScore === 'number' ? (
+                    <Badge
+                      variant={overallAnalysisLevel ? ANALYSIS_LEVEL_STYLE[overallAnalysisLevel].variant : 'default'}
+                      className="gap-1.5 shadow-none"
+                    >
+                      {overallAnalysisLevel ? (
+                        <StatusDot tone={ANALYSIS_LEVEL_STYLE[overallAnalysisLevel].tone} className="h-1.5 w-1.5" />
+                      ) : null}
+                      {text.analysisScore} {analysisScore.overallScore}/100
+                    </Badge>
+                  ) : null}
+                  {typeof analysisScore.confidence === 'number' ? (
+                    <span className="home-accent-chip px-2 py-0.5 text-xs text-muted-text">
+                      {text.analysisConfidence}: {analysisScore.confidence}/100
+                    </span>
+                  ) : null}
+                  {analysisActionLabel ? (
+                    <span className="home-accent-chip px-2 py-0.5 text-xs text-muted-text">
+                      {text.analysisAction}: {analysisActionLabel}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+
+              {analysisDimensions.length > 0 ? (
+                <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3">
+                  {analysisDimensions.map(({ key, value }) => {
+                    const level = value.level || 'unavailable';
+                    const style = ANALYSIS_LEVEL_STYLE[level];
+                    const levelLabel = getAnalysisLevelLabel(level, text);
+                    return (
+                      <div key={key} className="rounded-xl border border-white/8 bg-black/10 p-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-foreground">
+                              {formatAnalysisDimensionLabel(key, reportLanguage)}
+                            </p>
+                            {value.summary ? (
+                              <p className="mt-1 text-xs leading-5 text-secondary-text">{value.summary}</p>
+                            ) : null}
+                          </div>
+                          <Badge variant={style.variant} className="shrink-0 gap-1.5 shadow-none">
+                            <StatusDot tone={style.tone} className="h-1.5 w-1.5" />
+                            {typeof value.score === 'number' ? `${value.score}` : '--'}
+                          </Badge>
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-text">
+                          {levelLabel ? <span>{levelLabel}</span> : null}
+                          {typeof value.confidence === 'number' ? (
+                            <span>{text.analysisConfidence}: {value.confidence}/100</span>
+                          ) : null}
+                        </div>
+                        {value.signals?.length ? (
+                          <p className="mt-2 text-xs leading-5 text-muted-text">{value.signals.join('；')}</p>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
 
           {visibleCounts.length > 0 ? (
             <div className="mb-3 flex flex-wrap items-center gap-2">

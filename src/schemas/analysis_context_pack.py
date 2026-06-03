@@ -101,6 +101,32 @@ class DataQuality(_AnalysisContextModel):
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
+AnalysisScoreLevel = Literal["strong", "positive", "neutral", "cautious", "weak", "unavailable"]
+AnalysisScoreAction = Literal["priority_focus", "lean_positive", "neutral_wait", "cautious", "avoid"]
+
+
+class AnalysisScoreDimension(_AnalysisContextModel):
+    """Low-sensitivity score summary for one analysis dimension."""
+
+    status: ContextFieldStatus
+    score: Optional[int] = Field(None, ge=0, le=100)
+    confidence: Optional[int] = Field(None, ge=0, le=100)
+    level: Optional[AnalysisScoreLevel] = None
+    summary: Optional[str] = None
+    signals: List[str] = Field(default_factory=list)
+
+
+class AnalysisScore(_AnalysisContextModel):
+    """Aggregated low-sensitivity score summary for the current stock."""
+
+    overall_score: Optional[int] = Field(None, ge=0, le=100)
+    confidence: Optional[int] = Field(None, ge=0, le=100)
+    level: Optional[AnalysisScoreLevel] = None
+    action: Optional[AnalysisScoreAction] = None
+    summary: Optional[str] = None
+    dimensions: Dict[str, AnalysisScoreDimension] = Field(default_factory=dict)
+
+
 class AnalysisContextPack(_AnalysisContextModel):
     """Versioned internal analysis input envelope."""
 
@@ -109,6 +135,7 @@ class AnalysisContextPack(_AnalysisContextModel):
     phase: Optional[Dict[str, Any]] = None
     blocks: Dict[str, AnalysisContextBlock] = Field(default_factory=dict)
     data_quality: DataQuality = Field(default_factory=DataQuality)
+    analysis_score: Optional[AnalysisScore] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 

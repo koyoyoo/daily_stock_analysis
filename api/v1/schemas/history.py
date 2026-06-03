@@ -221,6 +221,49 @@ class AnalysisContextPackOverviewDataQuality(BaseModel):
     limitations: List[str] = Field(default_factory=list, description="低敏数据限制说明")
 
 
+class AnalysisContextPackOverviewScoreDimension(BaseModel):
+    """AnalysisContextPack 可见摘要分析评分维度"""
+
+    status: Literal[
+        "available",
+        "missing",
+        "not_supported",
+        "fallback",
+        "stale",
+        "estimated",
+        "partial",
+        "fetch_failed",
+    ] = Field(..., description="维度数据状态")
+    score: Optional[int] = Field(None, ge=0, le=100, description="维度评分")
+    confidence: Optional[int] = Field(None, ge=0, le=100, description="维度置信度")
+    level: Optional[Literal["strong", "positive", "neutral", "cautious", "weak", "unavailable"]] = Field(
+        None,
+        description="维度评分等级",
+    )
+    summary: Optional[str] = Field(None, description="维度结论")
+    signals: List[str] = Field(default_factory=list, description="维度关键依据")
+
+
+class AnalysisContextPackOverviewAnalysisScore(BaseModel):
+    """AnalysisContextPack 可见摘要分析评分"""
+
+    overall_score: Optional[int] = Field(None, ge=0, le=100, description="综合评分")
+    confidence: Optional[int] = Field(None, ge=0, le=100, description="综合置信度")
+    level: Optional[Literal["strong", "positive", "neutral", "cautious", "weak", "unavailable"]] = Field(
+        None,
+        description="综合评分等级",
+    )
+    action: Optional[Literal["priority_focus", "lean_positive", "neutral_wait", "cautious", "avoid"]] = Field(
+        None,
+        description="建议动作编码",
+    )
+    summary: Optional[str] = Field(None, description="综合结论")
+    dimensions: Dict[str, AnalysisContextPackOverviewScoreDimension] = Field(
+        default_factory=dict,
+        description="各维度评分详情",
+    )
+
+
 class AnalysisContextPackOverview(BaseModel):
     """历史/API 可见的低敏 AnalysisContextPack 摘要"""
 
@@ -232,6 +275,10 @@ class AnalysisContextPackOverview(BaseModel):
     data_quality: Optional[AnalysisContextPackOverviewDataQuality] = Field(
         None,
         description="本次分析输入数据质量低敏摘要",
+    )
+    analysis_score: Optional[AnalysisContextPackOverviewAnalysisScore] = Field(
+        None,
+        description="本次分析的低敏多维评分摘要",
     )
     warnings: List[str] = Field(default_factory=list, description="顶层数据质量提醒")
     metadata: AnalysisContextPackOverviewMetadata = Field(default_factory=AnalysisContextPackOverviewMetadata)

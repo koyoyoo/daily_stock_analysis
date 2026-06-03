@@ -165,12 +165,32 @@ export interface AnalysisContextPackOverviewMetadata {
 }
 
 export type AnalysisContextPackDataQualityLevel = 'good' | 'usable' | 'limited' | 'poor';
+export type AnalysisScoreLevel = 'strong' | 'positive' | 'neutral' | 'cautious' | 'weak' | 'unavailable';
+export type AnalysisScoreAction = 'priority_focus' | 'lean_positive' | 'neutral_wait' | 'cautious' | 'avoid';
 
 export interface AnalysisContextPackOverviewDataQuality {
   overallScore?: number | null;
   level?: AnalysisContextPackDataQualityLevel | null;
   blockScores: Record<string, number>;
   limitations: string[];
+}
+
+export interface AnalysisContextPackOverviewScoreDimension {
+  status: AnalysisContextPackBlockStatus;
+  score?: number | null;
+  confidence?: number | null;
+  level?: AnalysisScoreLevel | null;
+  summary?: string | null;
+  signals: string[];
+}
+
+export interface AnalysisContextPackOverviewAnalysisScore {
+  overallScore?: number | null;
+  confidence?: number | null;
+  level?: AnalysisScoreLevel | null;
+  action?: AnalysisScoreAction | null;
+  summary?: string | null;
+  dimensions: Record<string, AnalysisContextPackOverviewScoreDimension>;
 }
 
 export interface AnalysisContextPackOverview {
@@ -180,6 +200,7 @@ export interface AnalysisContextPackOverview {
   blocks: AnalysisContextPackOverviewBlock[];
   counts: AnalysisContextPackOverviewCounts;
   dataQuality?: AnalysisContextPackOverviewDataQuality | null;
+  analysisScore?: AnalysisContextPackOverviewAnalysisScore | null;
   warnings: string[];
   metadata: AnalysisContextPackOverviewMetadata;
 }

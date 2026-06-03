@@ -372,6 +372,23 @@ def test_chip_block_maps_local_volume_profile_source_to_readable_text() -> None:
     assert block.items["avg_cost"].source == "本地筹码峰算法（时间衰减）"
 
 
+def test_builder_generates_low_sensitivity_analysis_score() -> None:
+    pack = AnalysisContextBuilder.build(_artifacts())
+
+    assert pack.analysis_score is not None
+    assert pack.analysis_score.overall_score is not None
+    assert pack.analysis_score.action in {
+        "priority_focus",
+        "lean_positive",
+        "neutral_wait",
+        "cautious",
+        "avoid",
+    }
+    assert pack.analysis_score.dimensions["technical"].score is not None
+    assert pack.analysis_score.dimensions["chip"].score is not None
+    assert pack.analysis_score.dimensions["fundamentals"].summary
+
+
 @pytest.mark.parametrize(
     ("payload_status", "expected_status"),
     (

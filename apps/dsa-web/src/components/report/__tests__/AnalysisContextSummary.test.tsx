@@ -69,6 +69,39 @@ const overview: AnalysisContextPackOverview = {
     },
     limitations: ['fundamentals: fetch_failed'],
   },
+  analysisScore: {
+    overallScore: 68,
+    confidence: 74,
+    level: 'positive',
+    action: 'lean_positive',
+    summary: '技术面相对占优，基本面仍需继续确认，总体评分 68。',
+    dimensions: {
+      technical: {
+        status: 'partial',
+        score: 72,
+        confidence: 70,
+        level: 'positive',
+        summary: '技术面偏多，趋势结构整体占优。',
+        signals: ['趋势状态偏强（多头排列）', '短期均线向上'],
+      },
+      fundamentals: {
+        status: 'fetch_failed',
+        score: null,
+        confidence: null,
+        level: 'unavailable',
+        summary: '基本面覆盖不足，暂不评分。',
+        signals: [],
+      },
+      chip: {
+        status: 'available',
+        score: 71,
+        confidence: 80,
+        level: 'positive',
+        summary: '筹码面偏多，获利盘与集中度组合较健康。',
+        signals: ['获利盘占比偏高'],
+      },
+    },
+  },
   warnings: ['intraday_realtime_overlay'],
   metadata: {
     triggerSource: 'api',
@@ -91,6 +124,7 @@ describe('AnalysisContextSummary', () => {
     expect(screen.getAllByText('缺失 1')[0]).toBeVisible();
     expect(screen.getAllByText('抓取失败 1')[0]).toBeVisible();
     expect(screen.getAllByText('质量分 82/100 可用')[0]).toBeVisible();
+    expect(screen.getAllByText('分析分 68/100 偏多')[0]).toBeVisible();
     expect(screen.getByText('触发来源: api')).toBeVisible();
     expect(screen.getByText('来源: mock_quote')).not.toBeVisible();
 
@@ -99,6 +133,11 @@ describe('AnalysisContextSummary', () => {
     expect(panel).toHaveAttribute('open');
     expect(screen.getByText('行情')).toBeInTheDocument();
     expect(screen.getByText('来源: mock_quote')).toBeVisible();
+    expect(screen.getByText('多维评分')).toBeInTheDocument();
+    expect(screen.getByText(/分析结论: 技术面相对占优/)).toBeVisible();
+    expect(screen.getByText('策略建议: 偏多跟踪')).toBeVisible();
+    expect(screen.getByText('技术面偏多，趋势结构整体占优。')).toBeVisible();
+    expect(screen.getByText('筹码面偏多，获利盘与集中度组合较健康。')).toBeVisible();
     expect(screen.getByText('告警:')).toBeInTheDocument();
     expect(screen.getByText(/intraday_realtime_overlay/)).toBeInTheDocument();
     expect(screen.getByText('数据限制:')).toBeInTheDocument();
@@ -119,11 +158,13 @@ describe('AnalysisContextSummary', () => {
     expect(screen.getAllByText('Missing 1')[0]).toBeVisible();
     expect(screen.getAllByText('Fetch failed 1')[0]).toBeVisible();
     expect(screen.getAllByText('Quality 82/100 Usable')[0]).toBeVisible();
+    expect(screen.getAllByText('Score 68/100 Positive')[0]).toBeVisible();
     expect(screen.getByText('Trigger: api')).toBeVisible();
 
     fireEvent.click(within(panel).getAllByText('Input Blocks')[0]);
 
     expect(screen.getByText('Data Limitations:')).toBeInTheDocument();
+    expect(screen.getByText('Action: Lean positive')).toBeInTheDocument();
     expect(screen.getByText(/fundamentals: Fetch failed/)).toBeInTheDocument();
   });
 

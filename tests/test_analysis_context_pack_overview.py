@@ -17,6 +17,8 @@ from src.analysis_context_pack_prompt import (
     iter_analysis_context_pack_block_keys,
 )
 from src.schemas.analysis_context_pack import (
+    AnalysisScore,
+    AnalysisScoreDimension,
     AnalysisContextBlock,
     AnalysisContextItem,
     AnalysisContextPack,
@@ -108,6 +110,39 @@ def _pack() -> AnalysisContextPack:
             limitations=["quote: fallback", "technical: partial"],
             warnings=["intraday_realtime_overlay", "intraday_realtime_overlay"]
         ),
+        analysis_score=AnalysisScore(
+            overall_score=67,
+            confidence=74,
+            level="positive",
+            action="lean_positive",
+            summary="技术面相对占优，基本面仍需继续确认，总体评分 67。",
+            dimensions={
+                "technical": AnalysisScoreDimension(
+                    status=ContextFieldStatus.PARTIAL,
+                    score=72,
+                    confidence=70,
+                    level="positive",
+                    summary="技术面偏多，趋势结构整体占优。",
+                    signals=["趋势状态偏强"],
+                ),
+                "fundamentals": AnalysisScoreDimension(
+                    status=ContextFieldStatus.AVAILABLE,
+                    score=58,
+                    confidence=52,
+                    level="neutral",
+                    summary="基本面仅有状态级信息，适合做粗粒度判断。",
+                    signals=["valuation：ok"],
+                ),
+                "chip": AnalysisScoreDimension(
+                    status=ContextFieldStatus.AVAILABLE,
+                    score=71,
+                    confidence=80,
+                    level="positive",
+                    summary="筹码面偏多，获利盘与集中度组合较健康。",
+                    signals=["获利盘占比偏高"],
+                ),
+            },
+        ),
         metadata={
             "trigger_source": "api",
             "news_result_count": 3,
@@ -141,6 +176,7 @@ def test_renderer_outputs_only_public_schema_fields() -> None:
         "blocks",
         "counts",
         "data_quality",
+        "analysis_score",
         "warnings",
         "metadata",
     }
@@ -160,6 +196,14 @@ def test_renderer_outputs_only_public_schema_fields() -> None:
         "block_scores",
         "limitations",
     }
+    assert set(overview["analysis_score"]) == {
+        "overall_score",
+        "confidence",
+        "level",
+        "action",
+        "summary",
+        "dimensions",
+    }
     assert overview["data_quality"] == {
         "overall_score": 76,
         "level": "usable",
@@ -173,6 +217,8 @@ def test_renderer_outputs_only_public_schema_fields() -> None:
         },
         "limitations": ["quote: fallback", "technical: partial"],
     }
+    assert overview["analysis_score"]["overall_score"] == 67
+    assert overview["analysis_score"]["dimensions"]["technical"]["score"] == 72
 
 
 def test_renderer_does_not_dump_items_values_payloads_or_sensitive_markers() -> None:
@@ -393,6 +439,86 @@ def test_extract_accepts_legacy_overview_without_data_quality() -> None:
     assert extracted is not None
     assert "data_quality" not in extracted
     assert extracted["counts"]["fetch_failed"] == 0
+
+
+def test_extract_backfills_analysis_score_from_snapshot_when_persisted_overview_is_missing_it() -> None:
+    extracted = extract_analysis_context_pack_overview(
+        {
+            "enhanced_context": {
+                "code": "002015",
+                "date": "2026-06-03",
+                "today": {"close": 24.37},
+                "trend_analysis": {"trend_status": "强势多头"},
+                "fundamental_context": {
+                    "status": "partial",
+                    "coverage": {"valuation": "not_supported", "growth": "failed"},
+                    "source_chain": [{"provider": "realtime_quote", "result": "not_supported"}],
+                },
+            },
+            "realtime_quote_raw": {"price": 24.37, "source": "tencent"},
+            "chip_distribution_raw": {
+                "profit_ratio": 0.8868,
+                "avg_cost": 21.282,
+                "cost_90_low": 17.7462,
+                "cost_90_high": 23.9039,
+                "concentration_90": 0.1478,
+            },
+            "analysis_context_pack_overview": {
+                "pack_version": "1.0",
+                "subject": {"code": "002015", "stock_name": "协鑫能科", "market": "cn"},
+                "blocks": [
+                    {
+                        "key": "quote",
+                        "label": "行情",
+                        "status": "available",
+                        "source": "腾讯财经",
+                        "warnings": [],
+                        "missing_reasons": [],
+                    },
+                    {
+                        "key": "daily_bars",
+                        "label": "日线",
+                        "status": "available",
+                        "source": "storage.get_analysis_context",
+                        "warnings": [],
+                        "missing_reasons": [],
+                    },
+                    {
+                        "key": "technical",
+                        "label": "技术",
+                        "status": "partial",
+                        "source": None,
+                        "warnings": ["intraday_realtime_overlay"],
+                        "missing_reasons": [],
+                    },
+                    {
+                        "key": "chip",
+                        "label": "筹码",
+                        "status": "available",
+                        "source": "本地筹码峰算法（时间衰减）",
+                        "warnings": [],
+                        "missing_reasons": [],
+                    },
+                    {
+                        "key": "fundamentals",
+                        "label": "基本面",
+                        "status": "partial",
+                        "source": "realtime_quote",
+                        "warnings": [],
+                        "missing_reasons": [],
+                    },
+                ],
+                "metadata": {"trigger_source": "api"},
+                "analysis_score": None,
+            },
+        }
+    )
+
+    assert extracted is not None
+    assert extracted["analysis_score"] is not None
+    assert extracted["analysis_score"]["overall_score"] is not None
+    assert extracted["analysis_score"]["dimensions"]["chip"]["score"] is not None
+    assert extracted["analysis_score"]["dimensions"]["technical"]["status"] == "partial"
 
 
 def test_extract_returns_none_for_malformed_persisted_overview() -> None:

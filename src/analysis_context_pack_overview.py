@@ -16,6 +16,7 @@ from src.analysis_context_pack_prompt import (
 )
 from src.market_phase_summary import MARKET_PHASE_SUMMARY_KEY
 from src.schemas.analysis_context_pack import ContextFieldStatus
+from src.services.analysis_scoring import build_analysis_score
 
 
 ANALYSIS_CONTEXT_PACK_OVERVIEW_KEY = "analysis_context_pack_overview"
@@ -79,6 +80,7 @@ def render_analysis_context_pack_overview(
             "blocks": overview_blocks,
             "counts": counts,
             "data_quality": _sanitize_data_quality(payload.get("data_quality")),
+            "analysis_score": _sanitize_analysis_score(payload.get("analysis_score")),
             "warnings": _list_strings(_nested(payload, "data_quality", "warnings")),
             "metadata": {
                 "trigger_source": _safe_text(metadata.get("trigger_source")) or None,
@@ -98,7 +100,7 @@ def extract_analysis_context_pack_overview(context_snapshot: Any) -> Optional[Di
     overview = snapshot.get(ANALYSIS_CONTEXT_PACK_OVERVIEW_KEY)
     if not isinstance(overview, Mapping):
         return None
-    return _sanitize_persisted_overview(overview)
+    return _sanitize_persisted_overview(overview, snapshot=snapshot)
 
 
 def sanitize_context_snapshot_for_api(context_snapshot: Any) -> Any:
@@ -124,7 +126,11 @@ def _as_mapping(value: Any) -> Optional[Mapping[str, Any]]:
     return None
 
 
-def _sanitize_persisted_overview(overview: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
+def _sanitize_persisted_overview(
+    overview: Mapping[str, Any],
+    *,
+    snapshot: Optional[Mapping[str, Any]] = None,
+) -> Optional[Dict[str, Any]]:
     subject = overview.get("subject")
     blocks = overview.get("blocks")
     if not isinstance(subject, Mapping) or not isinstance(blocks, list):
@@ -179,6 +185,10 @@ def _sanitize_persisted_overview(overview: Mapping[str, Any]) -> Optional[Dict[s
     }
     if "data_quality" in overview:
         sanitized["data_quality"] = _sanitize_data_quality(overview.get("data_quality"))
+    if "analysis_score" in overview:
+        sanitized["analysis_score"] = _sanitize_analysis_score(overview.get("analysis_score"))
+    if not sanitized.get("analysis_score"):
+        sanitized["analysis_score"] = _rebuild_analysis_score_from_snapshot(snapshot, sanitized)
     return sanitized
 
 
@@ -193,6 +203,88 @@ def _sanitize_data_quality(value: Any) -> Optional[Dict[str, Any]]:
     }
 
 
+def _sanitize_analysis_score(value: Any) -> Optional[Dict[str, Any]]:
+    if not isinstance(value, Mapping):
+        return None
+    dimensions_raw = value.get("dimensions") if isinstance(value.get("dimensions"), Mapping) else {}
+    dimensions: Dict[str, Any] = {}
+    for key in ("technical", "fundamentals", "chip"):
+        item = dimensions_raw.get(key)
+        if not isinstance(item, Mapping):
+            continue
+        status = _safe_status(item.get("status"))
+        if status is None:
+            continue
+        dimensions[key] = {
+            "status": status,
+            "score": _safe_score(item.get("score")),
+            "confidence": _safe_score(item.get("confidence")),
+            "level": _safe_analysis_level(item.get("level")),
+            "summary": _safe_text(item.get("summary")) or None,
+            "signals": _list_strings(item.get("signals"), limit=3),
+        }
+    return {
+        "overall_score": _safe_score(value.get("overall_score")),
+        "confidence": _safe_score(value.get("confidence")),
+        "level": _safe_analysis_level(value.get("level")),
+        "action": _safe_analysis_action(value.get("action")),
+        "summary": _safe_text(value.get("summary")) or None,
+        "dimensions": dimensions,
+    }
+
+
+def _rebuild_analysis_score_from_snapshot(
+    snapshot: Optional[Mapping[str, Any]],
+    overview: Mapping[str, Any],
+) -> Optional[Dict[str, Any]]:
+    if not isinstance(snapshot, Mapping):
+        return None
+    enhanced_context = snapshot.get("enhanced_context")
+    if not isinstance(enhanced_context, Mapping):
+        return None
+    block_statuses = _extract_block_statuses(overview.get("blocks"))
+    if not block_statuses:
+        return None
+
+    fundamentals = enhanced_context.get("fundamental_context")
+    trend_result = enhanced_context.get("trend_analysis")
+    realtime_quote = snapshot.get("realtime_quote_raw")
+    chip_data = snapshot.get("chip_distribution_raw")
+
+    try:
+        score = build_analysis_score(
+            base_context=dict(enhanced_context),
+            realtime_quote=dict(realtime_quote) if isinstance(realtime_quote, Mapping) else None,
+            trend_result=dict(trend_result) if isinstance(trend_result, Mapping) else None,
+            chip_data=dict(chip_data) if isinstance(chip_data, Mapping) else None,
+            fundamental_context=dict(fundamentals) if isinstance(fundamentals, Mapping) else None,
+            block_statuses=block_statuses,
+        )
+    except Exception:
+        logger.debug("rebuild analysis score from snapshot failed", exc_info=True)
+        return None
+
+    return _sanitize_analysis_score(score.model_dump(mode="json"))
+
+
+def _extract_block_statuses(blocks: Any) -> Dict[str, ContextFieldStatus]:
+    if not isinstance(blocks, list):
+        return {}
+    result: Dict[str, ContextFieldStatus] = {}
+    for block in blocks:
+        if not isinstance(block, Mapping):
+            continue
+        key = _safe_text(block.get("key"))
+        status = _safe_status(block.get("status"))
+        if not key or status is None:
+            continue
+        try:
+            result[key] = ContextFieldStatus(status)
+        except ValueError:
+            continue
+    return result
+
+
 def _safe_status(value: Any) -> Optional[str]:
     text = _safe_text(value)
     return text if text in _ALL_STATUSES else None
@@ -201,6 +293,16 @@ def _safe_status(value: Any) -> Optional[str]:
 def _safe_quality_level(value: Any) -> Optional[str]:
     text = _safe_text(value)
     return text if text in {"good", "usable", "limited", "poor"} else None
+
+
+def _safe_analysis_level(value: Any) -> Optional[str]:
+    text = _safe_text(value)
+    return text if text in {"strong", "positive", "neutral", "cautious", "weak", "unavailable"} else None
+
+
+def _safe_analysis_action(value: Any) -> Optional[str]:
+    text = _safe_text(value)
+    return text if text in {"priority_focus", "lean_positive", "neutral_wait", "cautious", "avoid"} else None
 
 
 def _safe_score(value: Any) -> Optional[int]:

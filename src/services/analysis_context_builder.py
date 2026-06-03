@@ -16,6 +16,7 @@ from src.schemas.analysis_context_pack import (
     ContextFieldStatus,
     DataQuality,
 )
+from src.services.analysis_scoring import build_analysis_score
 
 
 _REALTIME_OVERLAY_WARNING = "intraday_realtime_overlay"
@@ -106,6 +107,14 @@ class AnalysisContextBuilder:
         blocks["fundamentals"] = _build_fundamentals_block(artifacts)
         blocks["news"] = _build_news_block(artifacts)
         data_quality = _build_data_quality(blocks, warnings=data_quality_warnings)
+        analysis_score = build_analysis_score(
+            base_context=artifacts.base_context,
+            realtime_quote=_to_dict(artifacts.realtime_quote),
+            trend_result=_to_dict(artifacts.trend_result),
+            chip_data=_to_dict(artifacts.chip_data),
+            fundamental_context=artifacts.fundamental_context,
+            block_statuses={key: block.status for key, block in blocks.items()},
+        )
 
         return AnalysisContextPack(
             subject=AnalysisSubject(
@@ -116,6 +125,7 @@ class AnalysisContextBuilder:
             phase=artifacts.phase,
             blocks=blocks,
             data_quality=data_quality,
+            analysis_score=analysis_score,
             metadata=metadata,
         )
 

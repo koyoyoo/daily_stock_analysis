@@ -34,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - [文档] 明确 AlphaSift 仅复用 DSA 现有 LLM/LiteLLM 配置语义，不新增 `LITELLM_MODEL`、`OPENAI_MODEL`、`OPENAI_BASE_URL`、`LLM_TIMEOUT_SEC` 等模型语义迁移；失败提示与回退路径统一沿用既有系统配置链路，仅影响 AlphaSift 选股能力本身。
 - [改进] 筹码分布新增基于本地日线缓存的 Volume Profile 兜底算法，当 Tushare/AkShare 接口失败时自动计算兼容 `ChipDistribution` 的筹码结果，并补充固定周期与时间衰减算法回归测试。
 - [改进] 首页与报告详情中的数据来源补充可读文案映射，外部行情/筹码来源显示中文名，本地 Volume Profile 兜底显示“本地筹码峰算法（时间衰减/固定周期）”，避免暴露内部来源标识。
+- [改进] 数据上下文面板新增低敏多维评分摘要，基于技术面、基本面、筹码面生成总分、维度分、置信度和策略建议，帮助用户从“数据是否可用”升级到“当前情况如何”的快速判断。
 
 <!-- 新条目格式：- [类型] 描述（类型取值：新功能/改进/修复/文档/测试/chore）-->
 <!-- 每条独立一行追加到本段末尾，无需分类标题，合并时冲突最小 -->
